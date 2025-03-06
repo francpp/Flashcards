@@ -4,16 +4,14 @@ import sqlite3
 import hashlib
 import datetime
 
-# ---- Funzione per connettersi al database SQLite ----
+# ---- Connessione al database SQLite ----
 def get_db_connection():
-    conn = sqlite3.connect("flashcards.db", check_same_thread=False)
-    return conn
+    return sqlite3.connect("flashcards.db", check_same_thread=False)
 
-# ---- Creazione tabelle se non esistono ----
 conn = get_db_connection()
 cursor = conn.cursor()
 
-# Tabella utenti
+# ---- Creazione delle tabelle se non esistono ----
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,7 +20,6 @@ CREATE TABLE IF NOT EXISTS users (
 )
 """)
 
-# Tabella flashcards (associate a ogni utente)
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS flashcards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,9 +33,9 @@ CREATE TABLE IF NOT EXISTS flashcards (
 """)
 conn.commit()
 
-# ---- Funzione per registrare un nuovo utente ----
+# ---- Funzione per registrare un utente ----
 def register_user(username, password):
-    hashed_pw = hashlib.sha256(password.encode()).hexdigest()  # Hash della password
+    hashed_pw = hashlib.sha256(password.encode()).hexdigest()
     try:
         cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_pw))
         conn.commit()
@@ -51,48 +48,54 @@ def login_user(username, password):
     hashed_pw = hashlib.sha256(password.encode()).hexdigest()
     cursor.execute("SELECT id FROM users WHERE username = ? AND password = ?", (username, hashed_pw))
     result = cursor.fetchone()
-    return result[0] if result else None  # Restituisce user_id se trovato
+    return result[0] if result else None
 
-# ---- Ottieni le flashcards dell'utente ----
-def get_flashcards(user_id):
-    df = pd.read_sql_query(f"SELECT * FROM flashcards WHERE user_id={user_id}", conn)
-    return df
-
-# ---- Aggiungi una flashcard ----
+# ---- Funzione per aggiungere una flashcard ----
 def add_flashcard(user_id, english, italian):
     today = datetime.date.today()
     cursor.execute("INSERT INTO flashcards (user_id, english, italian, level, next_review) VALUES (?, ?, ?, ?, ?)",
-                   (user_id, english, italian, 1, today))
+                   (user_id, english.strip(), italian.strip(), 1, today))
     conn.commit()
 
-# ---- Aggiorna il livello di una parola ----
-REVIEW_INTERVALS = {1: 2, 2: 5, 3: 15, 4: 40, 5: 100}  # Giorni di ripasso
+# ---- Intervalli di ripasso ----
+REVIEW_INTERVALS = {1: 2, 2: 5, 3: 15, 4: 40, 5: 100}
 
+# ---- Funzione per aggiornare il livello di una parola ----
 def update_level(user_id, word, correct):
     cursor.execute("SELECT level FROM flashcards WHERE user_id=? AND english=?", (user_id, word))
     result = cursor.fetchone()
     
     if result:
         current_level = result[0]
-        new_level = min(current_level + 1, 6) if correct else max(current_level - 1, 1)
+        if correct:
+            new_level = min(current_level + 1, 6)
+        else:
+            new_level = max(current_level - 1, 1)
+
         next_review = None if new_level == 6 else datetime.date.today() + datetime.timedelta(days=REVIEW_INTERVALS.get(new_level, 1))
 
         cursor.execute("UPDATE flashcards SET level=?, next_review=? WHERE user_id=? AND english=?",
                        (new_level, next_review, user_id, word))
         conn.commit()
 
-# ---- Ottieni parole da ripassare oggi ----
+# ---- Funzione per ottenere parole da ripassare oggi ----
 def get_words_to_review(user_id):
     today = datetime.date.today()
-    df = pd.read_sql_query(f"SELECT * FROM flashcards WHERE user_id={user_id} AND next_review <= '{today}'", conn)
+    df = pd.read_sql_query("SELECT * FROM flashcards WHERE user_id=? AND next_review <= ?", conn, params=(user_id, today))
     return df
 
 # ---- UI Streamlit ----
 st.title("📚 Flashcard Trainer")
 
-# ---- Sezione di login / registrazione ----
+# ---- Gestione login / registrazione ----
 if "user_id" not in st.session_state:
     st.session_state["user_id"] = None
+
+if "user_answer" not in st.session_state:
+    st.session_state["user_answer"] = ""
+
+if "feedback_message" not in st.session_state:
+    st.session_state["feedback_message"] = ""
 
 if st.session_state["user_id"] is None:
     choice = st.sidebar.selectbox("Seleziona:", ["Login", "Registrati"])
@@ -130,8 +133,9 @@ else:
     italian_word = st.text_input("Traduzione in Italiano")
     if st.button("Aggiungi"):
         if english_word and italian_word:
-            add_flashcard(st.session_state["user_id"], english_word.lower(), italian_word.lower())
+            add_flashcard(st.session_state["user_id"], english_word, italian_word)
             st.success(f"Aggiunta: {english_word} → {italian_word}")
+            st.rerun()
         else:
             st.warning("Inserisci entrambi i campi!")
 
@@ -141,26 +145,45 @@ else:
 
     if not words_to_review.empty:
         word_data = words_to_review.sample(1).iloc[0]
-        st.subheader(f"Qual è la traduzione di: **{word_data['english']}**?")
-        user_answer = st.text_input("Scrivi la traduzione:")
+        italian_word = word_data["italian"]
+        correct_answer = word_data["english"]
+
+        st.subheader(f"Come si dice in inglese: **{italian_word}**?")
+        user_answer = st.text_input("Scrivi la parola in inglese:", value="", key="answer_input")
 
         if st.button("Verifica"):
-            correct_answer = word_data["italian"].lower()
-            if user_answer.strip().lower() == correct_answer:
-                st.success("✅ Corretto!")
-                update_level(st.session_state["user_id"], word_data["english"], correct=True)
+            if user_answer.strip().lower() == correct_answer.lower():
+                st.session_state["feedback_message"] = "✅ Corretto!"
+                update_level(st.session_state["user_id"], correct_answer, correct=True)
             else:
-                st.error(f"❌ Sbagliato! La risposta corretta è: {correct_answer}")
-                update_level(st.session_state["user_id"], word_data["english"], correct=False)
+                st.session_state["feedback_message"] = f"❌ Sbagliato! La risposta corretta è: {correct_answer}"
+                update_level(st.session_state["user_id"], correct_answer, correct=False)
+
+            st.rerun()
+
     else:
         st.info("Nessuna parola da ripassare oggi!")
 
-    # ---- Mostra flashcards utente ----
-    st.header("📖 Le tue Flashcard")
-    df = get_flashcards(st.session_state["user_id"])
-    st.write(df)
+    st.write(st.session_state["feedback_message"])
 
-    # ---- Download CSV ----
-    st.header("⬇️ Scarica le tue Flashcard")
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button(label="📥 Scarica CSV", data=csv, file_name="flashcards.csv", mime="text/csv")
+    # ---- Seleziona livello per visualizzazione ----
+    st.header("📖 Le tue Flashcard")
+    selected_level = st.selectbox("Seleziona il livello da visualizzare:", [1, 2, 3, 4, 5, 6])
+
+    def get_flashcards_by_level(user_id, level):
+        query = "SELECT english, italian FROM flashcards WHERE user_id = ? AND level = ?"
+        df = pd.read_sql_query(query, conn, params=(user_id, level))
+        return df
+
+    df_filtered = get_flashcards_by_level(st.session_state["user_id"], selected_level)
+
+    if df_filtered.empty:
+        st.info("❕ Nessuna flashcard trovata per questo livello.")
+    else:
+        st.dataframe(df_filtered, hide_index=True)
+
+    # ---- Download CSV con tutte le flashcard ----
+    df_all = get_flashcards_by_level(st.session_state["user_id"], selected_level)
+    csv_all = df_all.to_csv(index=False).encode('utf-8')
+
+    st.download_button(label="📥 Scarica tutte le Flashcard (CSV)", data=csv_all, file_name="flashcards_tutte.csv", mime="text/csv")
