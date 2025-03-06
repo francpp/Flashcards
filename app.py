@@ -4,6 +4,13 @@ import sqlite3
 import hashlib
 import datetime
 
+import logging
+
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s")
+
+logging.debug("Questo è un messaggio di debug.")
+logging.info("L'app è stata avviata!")
+
 # ---- Adattatori e Convertitori per DATE ----
 sqlite3.register_adapter(datetime.date, lambda d: d.isoformat())
 sqlite3.register_converter("DATE", lambda s: datetime.date.fromisoformat(s.decode()))
@@ -36,9 +43,6 @@ CREATE TABLE IF NOT EXISTS flashcards (
 )
 """)
 conn.commit()
-
-df_users = pd.read_sql_query("SELECT id, username FROM users", conn)
-print(df_users)
 
 # ---- Funzione per registrare un utente ----
 def register_user(username, password):
