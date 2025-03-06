@@ -6,6 +6,10 @@ import datetime
 
 import logging
 
+import logging
+
+logging.basicConfig(level=logging.INFO)  # Mostra solo warning ed errori
+
 logging.info("L'app è stata avviata!")
 
 # ---- Adattatori e Convertitori per DATE ----
