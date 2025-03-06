@@ -37,10 +37,8 @@ CREATE TABLE IF NOT EXISTS flashcards (
 """)
 conn.commit()
 
-if st.sidebar.button("📋 Mostra utenti"):
-    st.sidebar.subheader("Lista utenti registrati")
-    df_users = pd.read_sql_query("SELECT id, username FROM users", conn)
-    print(df_users)
+df_users = pd.read_sql_query("SELECT id, username FROM users", conn)
+print(df_users)
 
 # ---- Funzione per registrare un utente ----
 def register_user(username, password):
