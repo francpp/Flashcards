@@ -6,8 +6,6 @@ import datetime
 
 import logging
 
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s")
-
 logging.info("L'app è stata avviata!")
 
 # ---- Adattatori e Convertitori per DATE ----
