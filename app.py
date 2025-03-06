@@ -67,7 +67,11 @@ def update_level(user_id, word, correct):
     
     if result:
         current_level = result[0]
-        new_level = min(current_level + 1, 6) if correct else max(current_level - 1, 1)
+        if correct:
+            new_level = min(current_level + 1, 6)
+        else:
+            new_level = max(current_level - 1, 1)
+
         next_review = None if new_level == 6 else datetime.date.today() + datetime.timedelta(days=REVIEW_INTERVALS.get(new_level, 1))
 
         cursor.execute("UPDATE flashcards SET level=?, next_review=? WHERE user_id=? AND english=?",
@@ -86,6 +90,9 @@ st.title("📚 Flashcard Trainer")
 # ---- Gestione login / registrazione ----
 if "user_id" not in st.session_state:
     st.session_state["user_id"] = None
+
+if "current_flashcard" not in st.session_state:
+    st.session_state["current_flashcard"] = None
 
 if "user_answer" not in st.session_state:
     st.session_state["user_answer"] = ""
@@ -143,12 +150,15 @@ else:
     words_to_review = get_words_to_review(st.session_state["user_id"])
 
     if not words_to_review.empty:
-        word_data = words_to_review.sample(1).iloc[0]
-        italian_word = word_data["italian"]
-        correct_answer = word_data["english"]
+        if st.session_state["current_flashcard"] is None:
+            st.session_state["current_flashcard"] = words_to_review.sample(1).iloc[0]
+
+        flashcard = st.session_state["current_flashcard"]
+        italian_word = flashcard["italian"]
+        correct_answer = flashcard["english"]
 
         st.subheader(f"Come si dice in inglese: **{italian_word}**?")
-        user_answer = st.text_area("Scrivi la frase in inglese:", key="answer_input")
+        user_answer = st.text_area("Scrivi la frase in inglese:", value=st.session_state["user_answer"])
 
         if st.button("Verifica"):
             if user_answer.strip().lower() == correct_answer.lower():
@@ -158,15 +168,11 @@ else:
                 st.session_state["feedback_message"] = f"❌ Sbagliato! La risposta corretta è: {correct_answer}"
                 update_level(st.session_state["user_id"], correct_answer, correct=False)
 
+            st.session_state["current_flashcard"] = None
+            st.session_state["user_answer"] = ""
             st.rerun()
 
     else:
         st.info("Nessuna frase da ripassare oggi!")
 
     st.write(st.session_state["feedback_message"])
-
-    # ---- Download CSV con tutte le flashcard ----
-    df_all = pd.read_sql_query("SELECT english, italian, level FROM flashcards WHERE user_id = ?", conn, params=(st.session_state["user_id"],))
-    csv_all = df_all.to_csv(index=False).encode('utf-8')
-
-    st.download_button(label="📥 Scarica tutte le Flashcard (CSV)", data=csv_all, file_name="flashcards_tutte.csv", mime="text/csv")
