@@ -6,9 +6,13 @@ import datetime
 
 import logging
 
-import logging
+# Imposta il logging su INFO e disabilita DEBUG
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-logging.basicConfig(level=logging.INFO)  # Mostra solo warning ed errori
+# Forza il livello di logging per Streamlit e altre librerie
+logging.getLogger().setLevel(logging.INFO)
+logging.getLogger("watchdog").setLevel(logging.WARNING)  # Se watchdog è la causa
+logging.getLogger("urllib3").setLevel(logging.WARNING)   # Se vengono log HTTP
 
 logging.info("L'app è stata avviata!")
 
