@@ -4,9 +4,13 @@ import sqlite3
 import hashlib
 import datetime
 
+# ---- Adattatori e Convertitori per DATE ----
+sqlite3.register_adapter(datetime.date, lambda d: d.isoformat())
+sqlite3.register_converter("DATE", lambda s: datetime.date.fromisoformat(s.decode()))
+
 # ---- Connessione al database SQLite ----
 def get_db_connection():
-    return sqlite3.connect("flashcards.db", check_same_thread=False)
+    return sqlite3.connect("flashcards.db", check_same_thread=False, detect_types=sqlite3.PARSE_DECLTYPES)
 
 conn = get_db_connection()
 cursor = conn.cursor()
