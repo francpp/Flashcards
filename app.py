@@ -176,3 +176,25 @@ else:
         st.info("Nessuna frase da ripassare oggi!")
 
     st.write(st.session_state["feedback_message"])
+
+    # ---- Seleziona livello per visualizzazione ----
+    st.header("📖 Le tue Flashcard")
+    selected_level = st.selectbox("Seleziona il livello da visualizzare:", [1, 2, 3, 4, 5, 6])
+
+    def get_flashcards_by_level(user_id, level):
+        query = "SELECT english, italian FROM flashcards WHERE user_id = ? AND level = ?"
+        df = pd.read_sql_query(query, conn, params=(user_id, level))
+        return df
+
+    df_filtered = get_flashcards_by_level(st.session_state["user_id"], selected_level)
+
+    if df_filtered.empty:
+        st.info("❕ Nessuna flashcard trovata per questo livello.")
+    else:
+        st.dataframe(df_filtered, hide_index=True)
+
+    # ---- Download CSV con tutte le flashcard ----
+    df_all = get_flashcards_by_level(st.session_state["user_id"], selected_level)
+    csv_all = df_all.to_csv(index=False).encode('utf-8')
+
+    st.download_button(label="📥 Scarica tutte le Flashcard (CSV)", data=csv_all, file_name="flashcards_tutte.csv", mime="text/csv")
