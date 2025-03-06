@@ -14,8 +14,6 @@ logging.getLogger().setLevel(logging.INFO)
 logging.getLogger("watchdog").setLevel(logging.WARNING)  # Se watchdog è la causa
 logging.getLogger("urllib3").setLevel(logging.WARNING)   # Se vengono log HTTP
 
-logging.info("L'app è stata avviata!")
-
 # ---- Adattatori e Convertitori per DATE ----
 sqlite3.register_adapter(datetime.date, lambda d: d.isoformat())
 sqlite3.register_converter("DATE", lambda s: datetime.date.fromisoformat(s.decode()))
@@ -143,6 +141,8 @@ if st.session_state["user_id"] is None:
 
 # ---- Sezione dopo il login ----
 else:
+    logging.info(f"Login by {st.session_state["user_id"]}")
+
     st.sidebar.success("✅ Login effettuato!")
     st.sidebar.button("Esci", on_click=lambda: st.session_state.update({"user_id": None}))
 
